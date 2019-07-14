@@ -1,0 +1,94 @@
+import React, { Component } from 'react';
+
+import logo from '../../assets/logo.svg';
+import { MdInsertDriveFile } from 'react-icons/md';
+import { distanceInWords } from 'date-fns';
+import pt from 'date-fns/locale/pt'
+
+import socket from 'socket.io-client';
+
+import Dropzone from 'react-dropzone';
+
+import api from '../../services/api';
+
+import './styles.css';
+
+export default class Box extends Component {
+
+    state = {
+        box: {}
+    }
+
+    async componentDidMount(){
+        this.subscribeToNewFiles();
+
+        const box = this.props.match.params.id;
+
+        const response = await api.get(`boxes/${box}`);
+
+        this.setState({ box: response.data });
+    }
+
+    subscribeToNewFiles = () => {
+        const box = this.props.match.params.id;
+        
+        const io = socket('https://backend-clone-dropbox.herokuapp.com');
+
+        io.emit('connectRoom', box);
+
+        io.on('file', file => {
+            this.setState({ box: { ...this.state.box, files: [file, ...this.state.box.files] } })
+        });
+    }
+
+    handleUpload = (files) => {
+        const box = this.props.match.params.id;
+
+        files.forEach(file => {
+            const data = new FormData();
+
+            data.append('file', file);
+
+            api.post(`boxes/files/${box}`, data);
+        });
+    };
+  
+  render() {
+    const { title, files } = this.state.box;
+
+    return (
+        <div id="box-container">
+            <header>
+                <img src={logo} alt=""/>
+                <h1>{title}</h1>
+            </header>
+
+            <Dropzone onDropAccepted={this.handleUpload}>
+                {({ getRootProps, getInputProps }) => (
+                    <div className="upload" {...getRootProps()}>
+                        <input {...getInputProps()}/>
+
+                        <p>Arraste e solte arquivos, ou clique aqui</p>
+                    </div>
+                )}
+            </Dropzone>
+
+            <ul>
+                { files && files.map(file => (
+
+                <li key={file._id}>
+                    <a className="fileInfo" href={file.url} target="_blank">
+                        <MdInsertDriveFile size={24} color="#A5Cfff" />
+                        <strong>{file.title}</strong>
+                    </a>
+
+                    <span>há {distanceInWords(file.createdAt, new Date(), { locale: pt })}</span>
+                </li>
+
+                )) }
+            </ul>
+        </div>
+    );
+  }
+}
+
